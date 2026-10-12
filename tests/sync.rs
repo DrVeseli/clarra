@@ -35,6 +35,16 @@ fn resolve(local: &Path, server: &Path, path: &str, content: &Path) {
     );
 }
 
+fn status(server: &Path) -> serde_json::Value {
+    let output = Command::new(env!("CARGO_BIN_EXE_clarra"))
+        .arg("status")
+        .arg(server)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
 fn conflict_files(directory: &Path) -> Vec<std::path::PathBuf> {
     fs::read_dir(directory)
         .unwrap()
@@ -127,4 +137,9 @@ fn one_cached_object_serves_every_pending_device() {
     assert_eq!(fs::read_dir(server.join(".sync/cache")).unwrap().count(), 0);
     assert_eq!(fs::read(bob.join("shared.bin")).unwrap(), b"one object");
     assert_eq!(fs::read(charlie.join("shared.bin")).unwrap(), b"one object");
+
+    let diagnostics = status(&server);
+    assert_eq!(diagnostics["files"], 1);
+    assert_eq!(diagnostics["uploaded_bytes"], 10);
+    assert_eq!(diagnostics["downloaded_bytes"], 20);
 }

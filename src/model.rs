@@ -80,6 +80,10 @@ pub enum Event {
     CacheRemoved {
         hash: String,
     },
+    DataTransferred {
+        uploaded_bytes: u64,
+        downloaded_bytes: u64,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -99,6 +103,10 @@ pub struct ProjectState {
     pub pending: HashMap<String, BTreeSet<String>>,
     pub holders: HashMap<String, BTreeSet<String>>,
     pub cached: HashSet<String>,
+    #[serde(default)]
+    pub uploaded_bytes: u64,
+    #[serde(default)]
+    pub downloaded_bytes: u64,
     #[serde(skip)]
     applied_events: HashSet<String>,
 }
@@ -199,6 +207,13 @@ impl ProjectState {
             }
             Event::CacheRemoved { hash } => {
                 self.cached.remove(hash);
+            }
+            Event::DataTransferred {
+                uploaded_bytes,
+                downloaded_bytes,
+            } => {
+                self.uploaded_bytes = self.uploaded_bytes.saturating_add(*uploaded_bytes);
+                self.downloaded_bytes = self.downloaded_bytes.saturating_add(*downloaded_bytes);
             }
         }
 

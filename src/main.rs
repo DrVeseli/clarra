@@ -27,7 +27,12 @@ enum Command {
         content: std::path::PathBuf,
     },
     /// Show project diagnostics on the server.
-    Status { project: std::path::PathBuf },
+    Status {
+        project: std::path::PathBuf,
+        /// Open the live terminal dashboard.
+        #[arg(long)]
+        tui: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -63,7 +68,11 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Command::Status { project } => {
+        Command::Status { project, tui: true } => clarra::dashboard::run(&project),
+        Command::Status {
+            project,
+            tui: false,
+        } => {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&clarra::server::diagnostics(&project)?)?

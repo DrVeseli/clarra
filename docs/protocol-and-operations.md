@@ -35,6 +35,13 @@ Show server diagnostics from the server host:
 clarra status <project>
 ```
 
+Add `--tui` for a live Vesper-themed dashboard. Press `r` to refresh immediately
+and `q`, Escape, or Ctrl-C to leave:
+
+```sh
+clarra status <project> --tui
+```
+
 `status` opens and, if necessary, initializes the project. Its pretty-printed
 JSON contains:
 
@@ -42,11 +49,23 @@ JSON contains:
 | --- | --- |
 | `project_id` | Generated project UUID |
 | `sequence` | Last ledger event sequence |
+| `participants` | Server account names/IDs and their registered device counts |
 | `devices` | Registered device count |
+| `files` | Paths with at least one current non-deleted head |
 | `revisions` | Recorded revision count |
 | `conflicts` | Paths with more than one head |
 | `pending_deliveries` | Sum of device entries still pending across revisions |
 | `cache_bytes` | Bytes in regular files under `.sync/cache`, including partial uploads |
+| `cache_limit` | Configured cache capacity in bytes |
+| `storage_bytes` | Ledger, derived index, and cache bytes |
+| `uploaded_bytes` | Content bytes accepted by the coordinator |
+| `downloaded_bytes` | Content bytes served by the coordinator |
+
+The dashboard also shows active file heads, participants and device counts,
+metadata storage, conflicts, pending deliveries, and durable uploaded/downloaded
+byte totals. Participant names resolve from the server operating-system account
+when possible. The current protocol does not expose SSH key comments or live
+session presence, so online state is shown as `not tracked`.
 
 ## Event notifications
 

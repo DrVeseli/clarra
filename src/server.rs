@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::ffi::CStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -5,10 +7,36 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 
 use crate::ledger::Ledger;
+use serde::Serialize;
+
 use crate::model::{Device, Event, Operation, ProjectState};
 use crate::protocol::{CHUNK_SIZE, PROTOCOL_VERSION, Request, Response, read_frame, write_frame};
 
-const DEFAULT_CACHE_LIMIT: u64 = 10 * 1024 * 1024 * 1024;
+pub(crate) const DEFAULT_CACHE_LIMIT: u64 = 10 * 1024 * 1024 * 1024;
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ParticipantDiagnostics {
+    pub id: String,
+    pub name: String,
+    pub devices: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Diagnostics {
+    pub project_id: String,
+    pub sequence: u64,
+    pub participants: Vec<ParticipantDiagnostics>,
+    pub devices: usize,
+    pub files: usize,
+    pub revisions: usize,
+    pub conflicts: usize,
+    pub pending_deliveries: usize,
+    pub cache_bytes: u64,
+    pub cache_limit: u64,
+    pub storage_bytes: u64,
+    pub uploaded_bytes: u64,
+    pub downloaded_bytes: u64,
+}
 
 pub fn serve(project: &Path, mut input: impl Read, mut output: impl Write) -> Result<()> {
     let ledger = Ledger::open(project)?;
@@ -26,19 +54,57 @@ pub fn serve(project: &Path, mut input: impl Read, mut output: impl Write) -> Re
 }
 
 pub fn diagnostics(project: &Path) -> Result<serde_json::Value> {
+    Ok(serde_json::to_value(diagnostics_snapshot(project)?)?)
+}
+
+pub fn diagnostics_snapshot(project: &Path) -> Result<Diagnostics> {
     let ledger = Ledger::open(project)?;
     let state = ledger.read()?;
     let pending_deliveries: usize = state.pending.values().map(|devices| devices.len()).sum();
     let cache_bytes = directory_size(&ledger.root().join(".sync/cache"))?;
-    Ok(serde_json::json!({
-        "project_id": state.project_id,
-        "sequence": state.sequence,
-        "devices": state.devices.len(),
-        "revisions": state.revisions.len(),
-        "conflicts": state.conflicts().len(),
-        "pending_deliveries": pending_deliveries,
-        "cache_bytes": cache_bytes,
-    }))
+    let mut participants = BTreeMap::<_, usize>::new();
+    for device in state.devices.values() {
+        *participants.entry(device.participant.clone()).or_default() += 1;
+    }
+    let participants = participants
+        .into_iter()
+        .map(|(id, devices)| ParticipantDiagnostics {
+            name: account_name(&id).unwrap_or_else(|| id.clone()),
+            id,
+            devices,
+        })
+        .collect();
+    let files = state
+        .heads
+        .values()
+        .filter(|heads| {
+            heads.iter().any(|id| {
+                state
+                    .revisions
+                    .get(id)
+                    .is_some_and(|revision| revision.operation == Operation::Upsert)
+            })
+        })
+        .count();
+    let storage_bytes = cache_bytes
+        .saturating_add(file_size(&ledger.root().join(".sync/ledger.log")))
+        .saturating_add(file_size(&ledger.root().join(".sync/index/state.json")));
+    let conflicts = state.conflicts().len();
+    Ok(Diagnostics {
+        project_id: state.project_id,
+        sequence: state.sequence,
+        participants,
+        devices: state.devices.len(),
+        files,
+        revisions: state.revisions.len(),
+        conflicts,
+        pending_deliveries,
+        cache_bytes,
+        cache_limit: cache_limit(),
+        storage_bytes,
+        uploaded_bytes: state.uploaded_bytes,
+        downloaded_bytes: state.downloaded_bytes,
+    })
 }
 
 fn handle_request(
@@ -196,7 +262,18 @@ fn handle_request(
                 drop(file);
                 verify_file(&partial, &hash, total_size)?;
                 fs::rename(&partial, ledger.cache_path(&hash))?;
-                ledger.append([Event::ContentCached { hash }])?;
+                ledger.append([
+                    Event::DataTransferred {
+                        uploaded_bytes: bytes.len() as u64,
+                        downloaded_bytes: 0,
+                    },
+                    Event::ContentCached { hash },
+                ])?;
+            } else {
+                ledger.append([Event::DataTransferred {
+                    uploaded_bytes: bytes.len() as u64,
+                    downloaded_bytes: 0,
+                }])?;
             }
             Ok(Response::UploadOffset { offset: new_offset })
         }
@@ -215,6 +292,12 @@ fn handle_request(
             file.seek(SeekFrom::Start(offset))?;
             let mut bytes = vec![0; CHUNK_SIZE.min((total_size - offset) as usize)];
             file.read_exact(&mut bytes)?;
+            if !bytes.is_empty() {
+                ledger.append([Event::DataTransferred {
+                    uploaded_bytes: 0,
+                    downloaded_bytes: bytes.len() as u64,
+                }])?;
+            }
             Ok(Response::Chunk {
                 offset,
                 total_size,
@@ -322,14 +405,18 @@ fn partial_path(ledger: &Ledger, hash: &str, device_id: &str) -> std::path::Path
 }
 
 fn enforce_cache_limit(ledger: &Ledger, incoming: u64) -> Result<()> {
-    let limit = std::env::var("CLARRA_CACHE_BYTES")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(DEFAULT_CACHE_LIMIT);
+    let limit = cache_limit();
     if directory_size(&ledger.root().join(".sync/cache"))?.saturating_add(incoming) > limit {
         bail!("server cache capacity exceeded");
     }
     Ok(())
+}
+
+fn cache_limit() -> u64 {
+    std::env::var("CLARRA_CACHE_BYTES")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT_CACHE_LIMIT)
 }
 
 fn directory_size(path: &Path) -> Result<u64> {
@@ -342,6 +429,24 @@ fn directory_size(path: &Path) -> Result<u64> {
         }
     }
     Ok(size)
+}
+
+fn file_size(path: &Path) -> u64 {
+    path.metadata().map_or(0, |metadata| metadata.len())
+}
+
+fn account_name(id: &str) -> Option<String> {
+    let uid = id.parse::<libc::uid_t>().ok()?;
+    // SAFETY: getpwuid returns process-owned read-only storage; the string is copied immediately.
+    let entry = unsafe { libc::getpwuid(uid) };
+    if entry.is_null() {
+        return None;
+    }
+    Some(
+        unsafe { CStr::from_ptr((*entry).pw_name) }
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
 fn effective_user_id() -> String {
