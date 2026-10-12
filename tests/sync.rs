@@ -63,7 +63,10 @@ fn devices_sync_offline_cache_conflicts_and_tombstones() {
     assert!(!bob.join("plan.md").exists());
     sync(&alice, &server);
     let events = sync(&bob, &server);
-    assert_eq!(fs::read_to_string(bob.join("plan.md")).unwrap(), "version one");
+    assert_eq!(
+        fs::read_to_string(bob.join("plan.md")).unwrap(),
+        "version one"
+    );
     assert!(events.contains("file_received"));
     assert_eq!(fs::read_dir(server.join(".sync/cache")).unwrap().count(), 0);
 
@@ -74,7 +77,10 @@ fn devices_sync_offline_cache_conflicts_and_tombstones() {
     let alice_events = sync(&alice, &server);
     assert!(bob_events.contains("conflict"));
     assert!(alice_events.contains("conflict"));
-    assert_eq!(fs::read_to_string(alice.join("plan.md")).unwrap(), "alice edit");
+    assert_eq!(
+        fs::read_to_string(alice.join("plan.md")).unwrap(),
+        "alice edit"
+    );
     assert_eq!(fs::read_to_string(bob.join("plan.md")).unwrap(), "bob edit");
     assert_eq!(conflict_files(&alice).len(), 1);
     assert_eq!(conflict_files(&bob).len(), 1);
@@ -93,7 +99,32 @@ fn devices_sync_offline_cache_conflicts_and_tombstones() {
     assert!(alice_events.contains("conflict"));
     assert!(!alice.join("plan.md").exists());
     assert!(conflict_files(&alice).iter().any(|path| {
-        fs::read_to_string(path)
-            .is_ok_and(|content| content == "bob survives deletion")
+        fs::read_to_string(path).is_ok_and(|content| content == "bob survives deletion")
     }));
+}
+
+#[test]
+fn one_cached_object_serves_every_pending_device() {
+    let temporary = tempdir().unwrap();
+    let server = temporary.path().join("server");
+    let alice = temporary.path().join("alice");
+    let bob = temporary.path().join("bob");
+    let charlie = temporary.path().join("charlie");
+    for directory in [&server, &alice, &bob, &charlie] {
+        fs::create_dir_all(directory).unwrap();
+    }
+    fs::write(alice.join("shared.bin"), b"one object").unwrap();
+
+    sync(&alice, &server);
+    sync(&bob, &server);
+    sync(&charlie, &server);
+    sync(&alice, &server);
+    assert_eq!(fs::read_dir(server.join(".sync/cache")).unwrap().count(), 1);
+
+    sync(&bob, &server);
+    assert_eq!(fs::read_dir(server.join(".sync/cache")).unwrap().count(), 1);
+    sync(&charlie, &server);
+    assert_eq!(fs::read_dir(server.join(".sync/cache")).unwrap().count(), 0);
+    assert_eq!(fs::read(bob.join("shared.bin")).unwrap(), b"one object");
+    assert_eq!(fs::read(charlie.join("shared.bin")).unwrap(), b"one object");
 }

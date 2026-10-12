@@ -59,6 +59,13 @@ fn handle_request(
         if version != PROTOCOL_VERSION {
             bail!("unsupported protocol version {version}");
         }
+        if device_id.is_empty()
+            || device_id.len() > 128
+            || device_token.len() < 32
+            || device_token.len() > 256
+        {
+            bail!("invalid device credentials");
+        }
         let token_hash = blake3::hash(device_token.as_bytes()).to_hex().to_string();
         let state = ledger.read()?;
         let state = match state.devices.get(&device_id) {
@@ -130,12 +137,17 @@ fn handle_request(
         }
         Request::UploadStatus { hash, total_size } => {
             validate_hash(&hash)?;
-            authorize_upload(&ledger.read()?, device_id, &hash, total_size)?;
+            let state = ledger.read()?;
+            authorize_upload(&state, device_id, &hash, total_size)?;
             let final_path = ledger.cache_path(&hash);
             if final_path.is_file() {
+                verify_file(&final_path, &hash, total_size)?;
+                if !state.cached.contains(&hash) {
+                    ledger.append([Event::ContentCached { hash }])?;
+                }
                 return Ok(Response::UploadOffset { offset: total_size });
             }
-            let partial = partial_path(ledger, &hash);
+            let partial = partial_path(ledger, &hash, device_id);
             let offset = partial.metadata().map_or(0, |metadata| metadata.len());
             if offset > total_size {
                 fs::remove_file(&partial)?;
@@ -163,7 +175,7 @@ fn handle_request(
             }
             authorize_upload(&ledger.read()?, device_id, &hash, total_size)?;
             enforce_cache_limit(ledger, bytes.len() as u64)?;
-            let partial = partial_path(ledger, &hash);
+            let partial = partial_path(ledger, &hash, device_id);
             let current_offset = partial.metadata().map_or(0, |metadata| metadata.len());
             if current_offset != offset {
                 return Ok(Response::UploadOffset {
@@ -239,8 +251,8 @@ fn handle_request(
             };
             for hash in hashes {
                 if !state.hash_still_needed(&hash) && ledger.cache_path(&hash).is_file() {
+                    state = ledger.append([Event::CacheRemoved { hash: hash.clone() }])?;
                     fs::remove_file(ledger.cache_path(&hash))?;
-                    state = ledger.append([Event::CacheRemoved { hash }])?;
                 }
             }
             Ok(Response::Ok)
@@ -301,11 +313,12 @@ fn validate_hash(hash: &str) -> Result<()> {
     Ok(())
 }
 
-fn partial_path(ledger: &Ledger, hash: &str) -> std::path::PathBuf {
+fn partial_path(ledger: &Ledger, hash: &str, device_id: &str) -> std::path::PathBuf {
+    let device = blake3::hash(device_id.as_bytes()).to_hex();
     ledger
         .root()
         .join(".sync/cache")
-        .join(format!("{hash}.partial"))
+        .join(format!("{hash}.partial-{device}"))
 }
 
 fn enforce_cache_limit(ledger: &Ledger, incoming: u64) -> Result<()> {
@@ -334,4 +347,118 @@ fn directory_size(path: &Path) -> Result<u64> {
 fn effective_user_id() -> String {
     // SAFETY: geteuid has no preconditions and no mutable global state.
     unsafe { libc::geteuid() }.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::model::Revision;
+
+    fn hello(
+        ledger: &Ledger,
+        participant: &str,
+        session: &mut Option<String>,
+        device_id: &str,
+        token: &str,
+    ) -> Result<Response> {
+        handle_request(
+            ledger,
+            participant,
+            session,
+            Request::Hello {
+                version: PROTOCOL_VERSION,
+                device_id: device_id.into(),
+                device_token: token.into(),
+            },
+        )
+    }
+
+    #[test]
+    fn partial_upload_resumes_after_restart_and_credentials_are_bound() {
+        let directory = tempdir().unwrap();
+        let participant = effective_user_id();
+        let alice_token = "a".repeat(32);
+        let bob_token = "b".repeat(32);
+        let content = b"abcdef";
+        let hash = blake3::hash(content).to_hex().to_string();
+        let ledger = Ledger::open(directory.path()).unwrap();
+        let mut alice = None;
+        hello(&ledger, &participant, &mut alice, "alice", &alice_token).unwrap();
+        handle_request(
+            &ledger,
+            &participant,
+            &mut alice,
+            Request::Announce {
+                revisions: vec![Revision {
+                    id: "revision-1".into(),
+                    path: "plan.md".into(),
+                    hash: Some(hash.clone()),
+                    size: content.len() as u64,
+                    parents: vec![],
+                    author_device: "alice".into(),
+                    operation: Operation::Upsert,
+                }],
+            },
+        )
+        .unwrap();
+        let mut bob = None;
+        hello(&ledger, &participant, &mut bob, "bob", &bob_token).unwrap();
+        let response = handle_request(
+            &ledger,
+            &participant,
+            &mut alice,
+            Request::UploadChunk {
+                hash: hash.clone(),
+                total_size: content.len() as u64,
+                offset: 0,
+                bytes: content[..3].to_vec(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(response, Response::UploadOffset { offset: 3 }));
+        drop(ledger);
+
+        let ledger = Ledger::open(directory.path()).unwrap();
+        let mut alice = None;
+        hello(&ledger, &participant, &mut alice, "alice", &alice_token).unwrap();
+        let response = handle_request(
+            &ledger,
+            &participant,
+            &mut alice,
+            Request::UploadStatus {
+                hash: hash.clone(),
+                total_size: content.len() as u64,
+            },
+        )
+        .unwrap();
+        assert!(matches!(response, Response::UploadOffset { offset: 3 }));
+        handle_request(
+            &ledger,
+            &participant,
+            &mut alice,
+            Request::UploadChunk {
+                hash: hash.clone(),
+                total_size: content.len() as u64,
+                offset: 3,
+                bytes: content[3..].to_vec(),
+            },
+        )
+        .unwrap();
+        assert_eq!(fs::read(ledger.cache_path(&hash)).unwrap(), content);
+        assert!(ledger.read().unwrap().cached.contains(&hash));
+
+        let mut impersonator = None;
+        assert!(
+            hello(
+                &ledger,
+                &participant,
+                &mut impersonator,
+                "alice",
+                &"wrong".repeat(8),
+            )
+            .is_err()
+        );
+    }
 }

@@ -26,8 +26,22 @@ pub struct Revision {
 impl Revision {
     pub fn validate(&self) -> Result<()> {
         validate_relative_path(&self.path)?;
+        if self.id.is_empty()
+            || self.id.len() > 128
+            || self.author_device.is_empty()
+            || self.author_device.len() > 128
+            || self.parents.len() > 64
+        {
+            bail!("invalid revision metadata limits");
+        }
         match self.operation {
-            Operation::Upsert if self.hash.is_none() => bail!("upsert revision has no hash"),
+            Operation::Upsert
+                if !self.hash.as_ref().is_some_and(|hash| {
+                    hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                }) =>
+            {
+                bail!("upsert revision has an invalid content hash")
+            }
             Operation::Delete if self.hash.is_some() || self.size != 0 => {
                 bail!("delete revision contains file content")
             }
@@ -275,7 +289,7 @@ impl ProjectState {
 }
 
 pub fn validate_relative_path(path: &str) -> Result<()> {
-    if path.is_empty() || path.contains('\0') || path.contains('\\') {
+    if path.is_empty() || path.len() > 4_096 || path.contains('\0') || path.contains('\\') {
         bail!("invalid portable path");
     }
     let candidate = Path::new(path);
@@ -317,7 +331,7 @@ mod tests {
         Revision {
             id: id.into(),
             path: "plan.md".into(),
-            hash: Some(format!("hash-{id}")),
+            hash: Some(blake3::hash(id.as_bytes()).to_hex().to_string()),
             size: 1,
             parents: parents.iter().map(|parent| (*parent).into()).collect(),
             author_device: author.into(),
