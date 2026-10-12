@@ -38,7 +38,7 @@ jobs:
           cp "target/$TARGET/release/clarra" dist/clarra
           tar -C dist -czf "$ARCHIVE" clarra
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.archive }}
           path: |
@@ -49,7 +49,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
