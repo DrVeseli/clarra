@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
-use green_sync::Engine;
+use clarra::Engine;
 
 #[derive(Parser)]
-#[command(name = "green-sync", version, about)]
+#[command(name = "clarra", version, about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -33,7 +33,7 @@ enum Command {
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Attach { project } => {
-            green_sync::server::serve(&project, std::io::stdin().lock(), std::io::stdout().lock())
+            clarra::server::serve(&project, std::io::stdin().lock(), std::io::stdout().lock())
         }
         Command::Sync {
             local,
@@ -66,14 +66,14 @@ fn main() -> anyhow::Result<()> {
         Command::Status { project } => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(&green_sync::server::diagnostics(&project)?)?
+                serde_json::to_string_pretty(&clarra::server::diagnostics(&project)?)?
             );
             Ok(())
         }
     }
 }
 
-fn print_event(event: green_sync::EngineEvent) {
+fn print_event(event: clarra::EngineEvent) {
     println!(
         "{}",
         serde_json::to_string(&event).expect("event serializes")

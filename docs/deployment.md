@@ -10,13 +10,13 @@ cargo build --release
 cargo install --path .
 ```
 
-On the server, place `green-sync` on the SSH user's non-interactive `PATH` and
+On the server, place `clarra` on the SSH user's non-interactive `PATH` and
 create a project directory writable by that user:
 
 ```sh
-sudo install -m 0755 target/release/green-sync /usr/local/bin/green-sync
-sudo mkdir -p /srv/green-sync/team
-sudo chown sync-user:sync-user /srv/green-sync/team
+sudo install -m 0755 target/release/clarra /usr/local/bin/clarra
+sudo mkdir -p /srv/clarra/team
+sudo chown sync-user:sync-user /srv/clarra/team
 ```
 
 The project directory must exist before the first session. The first `attach`,
@@ -26,20 +26,20 @@ project ID.
 Test command availability through the same SSH identity used by clients:
 
 ```sh
-ssh sync-user@example.com 'command -v green-sync'
-ssh sync-user@example.com 'green-sync status /srv/green-sync/team'
+ssh sync-user@example.com 'command -v clarra'
+ssh sync-user@example.com 'clarra status /srv/clarra/team'
 ```
 
 Clients use `[user@]host:/project/path`:
 
 ```sh
-green-sync sync ./team sync-user@example.com:/srv/green-sync/team --watch
+clarra sync ./team sync-user@example.com:/srv/clarra/team --watch
 ```
 
 Internally this launches the equivalent of:
 
 ```sh
-ssh -- sync-user@example.com "green-sync attach -- '/srv/green-sync/team'"
+ssh -- sync-user@example.com "clarra attach -- '/srv/clarra/team'"
 ```
 
 `attach` is a binary stdin/stdout protocol endpoint, not an interactive shell
@@ -56,11 +56,11 @@ command is required.
 Later sessions using that device ID must present the same token and run under
 the same effective user ID. Reusing an ID with a different token or effective
 user is rejected. Different SSH accounts mapped to the same Unix UID are the
-same participant from Green Sync's perspective.
+same participant from Clarra's perspective.
 
 ## Authorization boundaries
 
-Green Sync relies on deployment controls for project membership:
+Clarra relies on deployment controls for project membership:
 
 - SSH decides who may reach the server and execute a command.
 - Unix filesystem permissions decide which project directories that process
@@ -83,7 +83,7 @@ components. The server rejects `.sync`, cache, or index when those paths are
 symlinks. These checks do not replace restrictive ownership and permissions on
 the project directory.
 
-For a restricted deployment, configure SSH outside Green Sync so the account
+For a restricted deployment, configure SSH outside Clarra so the account
 can run only approved commands and access only intended project directories.
 The repository does not provide an `authorized_keys` forced-command wrapper,
 path allowlist, sandbox, or privilege separation. Do not expose arbitrary

@@ -2,13 +2,13 @@
 
 ## Rust
 
-The package is named `green-sync`; its Rust crate name is `green_sync`. For a
+The package and Rust crate are named `clarra`. For a
 checkout dependency:
 
 ```toml
 [dependencies]
 anyhow = "1"
-green-sync = { path = "../green-sync" }
+clarra = { path = "../clarra" }
 ```
 
 `Engine::new` only stores the local and remote values. The first `sync_once`
@@ -20,7 +20,7 @@ The crate root re-exports `Engine`, `EngineEvent`, `Conflict`, and `Revision`.
 `client`, `ledger`, `model`, `protocol`, and `server` modules are also public.
 
 ```rust
-use green_sync::{Engine, EngineEvent};
+use clarra::{Engine, EngineEvent};
 
 fn report(event: EngineEvent) {
     match event {
@@ -37,7 +37,7 @@ fn report(event: EngineEvent) {
 fn main() -> anyhow::Result<()> {
     let engine = Engine::new(
         "./team",
-        "sync-user@example.com:/srv/green-sync/team",
+        "sync-user@example.com:/srv/clarra/team",
     );
 
     for event in engine.sync_once()? {
@@ -58,29 +58,29 @@ arrive as `EngineEvent::Error` instead of ending the loop.
 There is no native Swift API in this repository. Launch the CLI with
 Foundation `Process` and decode each stdout line. Device registration remains
 automatic because the CLI engine creates and stores identity under
-`<local>/.green-sync/` during its first pass.
+`<local>/.clarra/` during its first pass.
 
 ```swift
 import Foundation
 
-struct GreenSyncEvent: Decodable {
+struct ClarraEvent: Decodable {
     let type: String
     let path: String?
     let revision_ids: [String]?
     let message: String?
 }
 
-func watchGreenSync(
+func watchClarra(
     local: String,
     remote: String,
-    onEvent: @escaping (GreenSyncEvent) -> Void
+    onEvent: @escaping (ClarraEvent) -> Void
 ) throws -> Process {
     let process = Process()
     let stdout = Pipe()
 
-    // `env` resolves green-sync through PATH.
+    // `env` resolves clarra through PATH.
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["green-sync", "sync", local, remote, "--watch"]
+    process.arguments = ["clarra", "sync", local, remote, "--watch"]
     process.standardOutput = stdout
     process.standardError = FileHandle.standardError
 
@@ -98,7 +98,7 @@ func watchGreenSync(
             while let newline = buffer.firstIndex(of: 0x0A) {
                 let line = Data(buffer[..<newline])
                 buffer.removeSubrange(...newline)
-                if let event = try? JSONDecoder().decode(GreenSyncEvent.self, from: line) {
+                if let event = try? JSONDecoder().decode(ClarraEvent.self, from: line) {
                     onEvent(event)
                 }
             }
@@ -108,9 +108,9 @@ func watchGreenSync(
     return process
 }
 
-let process = try watchGreenSync(
+let process = try watchClarra(
     local: "/Users/alice/Team",
-    remote: "sync-user@example.com:/srv/green-sync/team"
+    remote: "sync-user@example.com:/srv/clarra/team"
 ) { event in
     print(event.type, event.path ?? event.message ?? "")
 }

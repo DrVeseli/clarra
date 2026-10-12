@@ -2,17 +2,17 @@
 
 ## Components
 
-Green Sync has three runtime pieces:
+Clarra has three runtime pieces:
 
 - `Engine` scans a local directory, records revisions, transfers objects, and
   applies remote revisions.
-- `green-sync` exposes the engine as `sync` and `resolve`, and exposes the
+- `clarra` exposes the engine as `sync` and `resolve`, and exposes the
   server as `attach` and `status`.
 - The server-side ledger is an append-only metadata coordinator. Its cache is
   a delivery buffer, not a backup or primary file store.
 
-An SSH sync starts `green-sync attach` on demand. There is no daemon or
-listening Green Sync port. The client and server exchange binary messages over
+An SSH sync starts `clarra attach` on demand. There is no daemon or
+listening Clarra port. The client and server exchange binary messages over
 the child process's stdin and stdout.
 
 Each sync performs this sequence:
@@ -26,14 +26,14 @@ Each sync performs this sequence:
 
 Concurrent heads are preserved as conflicts. A non-fast-forward remote upsert
 is written beside the original as
-`<stem>.green-sync-conflict-<device>-<revision><extension>`; the existing file
+`<stem>.clarra-conflict-<device>-<revision><extension>`; the existing file
 is not overwritten. `resolve` creates one revision whose parents are all known
 heads.
 
 ## Deliberate MVP choices
 
-- SSH supplies transport encryption and access to the remote command; Green
-  Sync does not run an HTTP service or implement an application login.
+- SSH supplies transport encryption and access to the remote command; Clarra
+  does not run an HTTP service or implement an application login.
 - The server always uses its temporary content cache for delivery. Direct
   device-to-device or live stream relay is not implemented.
 - Metadata is event-sourced in a JSON-lines ledger. The JSON index is derived
@@ -48,9 +48,9 @@ heads.
 For a local directory `<local>`:
 
 ```text
-<local>/.green-sync/state.json   device credentials, revisions, heads, outbox
-<local>/.green-sync/objects/     retained content-addressed objects
-<local>/.green-sync/tmp/         captures and partial downloads
+<local>/.clarra/state.json   device credentials, revisions, heads, outbox
+<local>/.clarra/objects/     retained content-addressed objects
+<local>/.clarra/tmp/         captures and partial downloads
 ```
 
 For a server project `<project>`:
@@ -69,9 +69,9 @@ locally; only its BLAKE3 hash is recorded in the server ledger. Deleting local
 local revision bookkeeping.
 
 The scanner recursively includes regular files. It skips symlinks,
-`.green-sync/`, generated names beginning with `.green-sync-`, and generated
+`.clarra/`, generated names beginning with `.clarra-`, and generated
 conflict copies. Paths must be relative UTF-8 paths and cannot contain `..`, a
-backslash, NUL, or a first component of `.green-sync`.
+backslash, NUL, or a first component of `.clarra`.
 
 ## Recovery
 

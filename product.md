@@ -1,4 +1,4 @@
-# Green Sync — Technical Specification
+# Clarra — Technical Specification
 
 **Status:** Initial architecture / MVP specification  
 **Project:** Reusable, file-agnostic synchronization engine  
@@ -7,7 +7,7 @@
 
 ## 1. Project Overview
 
-Green Sync is a lightweight, decentralized file synchronization engine designed to be embedded in desktop applications.
+Clarra is a lightweight, decentralized file synchronization engine designed to be embedded in desktop applications.
 
 The goal is to synchronize arbitrary application files across multiple computers without requiring a traditional database server, HTTP API, permanent server-side file storage, or application-specific data schemas.
 
@@ -75,7 +75,7 @@ Each synchronized project corresponds to a server directory.
 Example:
 
     /projects/
-        Green/
+        Clarra/
             .sync/
                 ledger.log
                 participants/
@@ -92,8 +92,8 @@ The ledger contains persistent metadata. The index contains derived metadata for
 
 ### First participant
 
-1. Alice creates `/projects/Green` on the server and has permission to access it.
-2. Alice launches the Green application on her Mac.
+1. Alice creates `/projects/Clarra` on the server and has permission to access it.
+2. Alice launches the Clarra application on her Mac.
 3. The application's sync engine connects to the server project over SSH.
 4. If the ledger does not exist, the server initializes it automatically.
 5. Alice's engine scans the application's local storage.
@@ -105,7 +105,7 @@ The project is now initialized.
 
 ### Additional participants
 
-1. Bob installs or launches the Green application.
+1. Bob installs or launches the Clarra application.
 2. Bob connects to the same server directory using his authorized SSH identity.
 3. The server registers Bob's device as a participant.
 4. Bob's engine scans its local storage and compares its state against the project ledger.
@@ -340,7 +340,7 @@ A client opens a bidirectional SSH session to a generic server-side executable.
 
 Conceptually:
 
-    ssh user@server green-sync attach /projects/Green
+    ssh user@server clarra attach /projects/Clarra
 
 The server-side implementation may use a globally installed coordinator and internal Unix-domain sockets to manage concurrent sessions. No per-project listening port is necessary.
 
@@ -554,7 +554,7 @@ The MVP is considered functional when all of the following pass.
 
 | Test | Expected result |
 |---|---|
-| Alice initializes Green with existing files | Ledger created; server stores metadata but no file content |
+| Alice initializes Clarra with existing files | Ledger created; server stores metadata but no file content |
 | Bob joins while Alice is online | Bob receives all required files through the server relay |
 | Bob joins while Alice is offline | Bob is registered; required files remain pending |
 | Alice reconnects while Bob is offline | Required content is staged in the server cache |
@@ -619,7 +619,7 @@ These enhancements should build on the same concepts of immutable revisions, con
 
 ## Final Design Requirement
 
-**Green Sync must separate knowledge of the data from possession of the data.**
+**Clarra must separate knowledge of the data from possession of the data.**
 
 The server maintains authoritative synchronization metadata: which revisions exist, which participants possess them, and which transfers remain outstanding.
 

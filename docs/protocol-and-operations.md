@@ -5,7 +5,7 @@
 Run one synchronization pass:
 
 ```sh
-green-sync sync <local> <[user@]host:/project/path>
+clarra sync <local> <[user@]host:/project/path>
 ```
 
 Use `local:<project>` instead of an SSH remote for local testing. Add `--watch`
@@ -17,7 +17,7 @@ Resolve all known heads for a conflicted path with bytes from a file, then run
 one sync pass:
 
 ```sh
-green-sync resolve <local> <remote> <relative-path> <content-file>
+clarra resolve <local> <remote> <relative-path> <content-file>
 ```
 
 The path must currently have at least two heads in local state. The selected
@@ -26,13 +26,13 @@ content replaces the working file and becomes a new merge revision.
 Serve one binary protocol session over stdin/stdout:
 
 ```sh
-green-sync attach <project>
+clarra attach <project>
 ```
 
 Show server diagnostics from the server host:
 
 ```sh
-green-sync status <project>
+clarra status <project>
 ```
 
 `status` opens and, if necessary, initializes the project. Its pretty-printed
@@ -66,11 +66,11 @@ or disconnection still returns an error.
 
 ## Cache quota
 
-The default server cache limit is 10 GiB. Set `GREEN_SYNC_CACHE_BYTES` in the
-environment of `green-sync attach` to a decimal byte limit:
+The default server cache limit is 10 GiB. Set `CLARRA_CACHE_BYTES` in the
+environment of `clarra attach` to a decimal byte limit:
 
 ```sh
-GREEN_SYNC_CACHE_BYTES=1073741824 green-sync attach /srv/green-sync/team
+CLARRA_CACHE_BYTES=1073741824 clarra attach /srv/clarra/team
 ```
 
 The server checks current cache-directory bytes plus each incoming upload

@@ -4,7 +4,7 @@ use std::path::{Component, Path};
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-pub const INTERNAL_DIR: &str = ".green-sync";
+pub const INTERNAL_DIR: &str = ".clarra";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -389,7 +389,7 @@ mod tests {
     fn traversal_and_internal_paths_are_rejected() {
         assert!(validate_relative_path("documents/plan.md").is_ok());
         assert!(validate_relative_path("../secret").is_err());
-        assert!(validate_relative_path(".green-sync/state.json").is_err());
+        assert!(validate_relative_path(".clarra/state.json").is_err());
         assert!(validate_relative_path("C:\\secret").is_err());
     }
 }

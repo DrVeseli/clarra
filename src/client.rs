@@ -568,7 +568,7 @@ impl Session {
             {
                 bail!("invalid SSH remote");
             }
-            let remote_command = format!("green-sync attach -- {}", shell_quote(project));
+            let remote_command = format!("clarra attach -- {}", shell_quote(project));
             let mut command = Command::new("ssh");
             command.arg("--").arg(host).arg(remote_command);
             command
@@ -682,7 +682,7 @@ fn collect_files(root: &Path, ignored: &BTreeSet<String>) -> Result<HashMap<Stri
             } else if metadata.is_file() {
                 if path
                     .file_name()
-                    .is_some_and(|name| name.to_string_lossy().starts_with(".green-sync-"))
+                    .is_some_and(|name| name.to_string_lossy().starts_with(".clarra-"))
                 {
                     continue;
                 }
@@ -736,7 +736,7 @@ fn install_reader(root: &Path, relative: &str, input: &mut impl Read) -> Result<
         .context("file has no parent directory")?;
     create_safe_directories(root, parent)?;
     reject_symlink(&destination)?;
-    let temporary = parent.join(format!(".green-sync-{}.tmp", Uuid::new_v4()));
+    let temporary = parent.join(format!(".clarra-{}.tmp", Uuid::new_v4()));
     let mut output = File::create(&temporary)?;
     std::io::copy(input, &mut output)?;
     output.sync_all()?;
@@ -822,7 +822,7 @@ fn conflict_path(revision: &Revision) -> String {
         .take(8)
         .collect();
     let revision_id: String = revision.id.chars().take(8).collect();
-    let filename = format!("{stem}.green-sync-conflict-{author}-{revision_id}{extension}");
+    let filename = format!("{stem}.clarra-conflict-{author}-{revision_id}{extension}");
     path.parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .map_or(filename.clone(), |parent| {
@@ -856,7 +856,7 @@ mod tests {
         };
         assert_eq!(
             conflict_path(&revision),
-            "docs/plan.green-sync-conflict-alicedev-12345678.md"
+            "docs/plan.clarra-conflict-alicedev-12345678.md"
         );
     }
 }

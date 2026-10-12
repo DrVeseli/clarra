@@ -5,7 +5,7 @@ use std::process::Command;
 use tempfile::tempdir;
 
 fn sync(local: &Path, server: &Path) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_green-sync"))
+    let output = Command::new(env!("CARGO_BIN_EXE_clarra"))
         .arg("sync")
         .arg(local)
         .arg(format!("local:{}", server.display()))
@@ -20,7 +20,7 @@ fn sync(local: &Path, server: &Path) -> String {
 }
 
 fn resolve(local: &Path, server: &Path, path: &str, content: &Path) {
-    let output = Command::new(env!("CARGO_BIN_EXE_green-sync"))
+    let output = Command::new(env!("CARGO_BIN_EXE_clarra"))
         .arg("resolve")
         .arg(local)
         .arg(format!("local:{}", server.display()))
@@ -42,7 +42,7 @@ fn conflict_files(directory: &Path) -> Vec<std::path::PathBuf> {
         .map(|entry| entry.path())
         .filter(|path| {
             path.file_name()
-                .is_some_and(|name| name.to_string_lossy().contains(".green-sync-conflict-"))
+                .is_some_and(|name| name.to_string_lossy().contains(".clarra-conflict-"))
         })
         .collect()
 }

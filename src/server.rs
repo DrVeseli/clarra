@@ -322,7 +322,7 @@ fn partial_path(ledger: &Ledger, hash: &str, device_id: &str) -> std::path::Path
 }
 
 fn enforce_cache_limit(ledger: &Ledger, incoming: u64) -> Result<()> {
-    let limit = std::env::var("GREEN_SYNC_CACHE_BYTES")
+    let limit = std::env::var("CLARRA_CACHE_BYTES")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_CACHE_LIMIT);

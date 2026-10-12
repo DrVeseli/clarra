@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: clarra-linux-x86_64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            archive: clarra-macos-arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            archive: clarra-macos-x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo build --locked --release --target "${{ matrix.target }}"
+      - name: Package binary
+        env:
+          ARCHIVE: ${{ matrix.archive }}-${{ github.ref_name }}.tar.gz
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir dist
+          cp "target/$TARGET/release/clarra" dist/clarra
+          tar -C dist -czf "$ARCHIVE" clarra
+          shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: |
+            ${{ matrix.archive }}-${{ github.ref_name }}.tar.gz
+            ${{ matrix.archive }}-${{ github.ref_name }}.tar.gz.sha256
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --repo "$GITHUB_REPOSITORY"
+          --title "Clarra $GITHUB_REF_NAME"
+          --generate-notes
+          --verify-tag
